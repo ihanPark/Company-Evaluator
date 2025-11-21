@@ -1,3 +1,4 @@
+const DOT_TARGET_COUNT = 400;
 const graphImageInput = document.getElementById('graphImage');
 const analyzeImageButton = document.getElementById('analyzeImage');
 const graphCanvas = document.getElementById('graphCanvas');
@@ -176,7 +177,7 @@ function detectGraphMask(ctx, width, height) {
     };
 }
 
-function sampleGraphDots(mask, width, height, desiredCount = 100) {
+function sampleGraphDots(mask, width, height, desiredCount = DOT_TARGET_COUNT) {
     const coords = [];
     for (let index = 0; index < mask.length; index += 1) {
         if (mask[index]) {
@@ -547,7 +548,7 @@ analyzeImageButton.addEventListener('click', () => {
     }
 
     const mask = highlightSummary.highlightMask;
-    const graphDots = sampleGraphDots(mask, width, height, 100);
+    const graphDots = sampleGraphDots(mask, width, height, DOT_TARGET_COUNT);
 
     if (!graphDots.length) {
         imageMessageContainer.textContent = 'Detected potential curve pixels but could not place dots. Try a clearer image with stronger colour contrast.';
