@@ -323,10 +323,10 @@ function detectLocalExtrema(profile) {
 
     const maxima = [];
     const minima = [];
-    const slopeThreshold = 0.3;
+    const slopeThreshold = 0.2;
     const separation = 4;
 
-    function recordExtrema(list, point) {
+    function recordExtrema(list, point, preferLowerY = false) {
         if (!list.length) {
             list.push(point);
             return;
@@ -335,7 +335,7 @@ function detectLocalExtrema(profile) {
         const last = list[list.length - 1];
         if (Math.abs(last.x - point.x) >= separation) {
             list.push(point);
-        } else if (point.y < last.y) {
+        } else if ((preferLowerY && point.y < last.y) || (!preferLowerY && point.y > last.y)) {
             list[list.length - 1] = point;
         }
     }
@@ -344,25 +344,49 @@ function detectLocalExtrema(profile) {
         const smoothed = segment.map((point, index) => {
             let sum = 0;
             let count = 0;
-            for (let i = Math.max(0, index - 1); i <= Math.min(segment.length - 1, index + 1); i += 1) {
+            for (let i = Math.max(0, index - 2); i <= Math.min(segment.length - 1, index + 2); i += 1) {
                 sum += segment[i].y;
                 count += 1;
             }
             return { x: point.x, y: sum / count };
         });
 
+        const derivatives = smoothed.map((point, index) => {
+            if (index === 0) {
+                return 0;
+            }
+            return smoothed[index].y - smoothed[index - 1].y;
+        });
+
         for (let i = 1; i < smoothed.length - 1; i += 1) {
-            const prev = smoothed[i - 1];
-            const curr = smoothed[i];
-            const next = smoothed[i + 1];
+            const prevSlope = derivatives[i];
+            const nextSlope = derivatives[i + 1];
 
-            const dyPrev = curr.y - prev.y;
-            const dyNext = next.y - curr.y;
+            const crossingMax = prevSlope < -slopeThreshold && nextSlope > slopeThreshold;
+            const crossingMin = prevSlope > slopeThreshold && nextSlope < -slopeThreshold;
 
-            if (dyPrev < -slopeThreshold && dyNext > slopeThreshold) {
-                recordExtrema(maxima, curr);
-            } else if (dyPrev > slopeThreshold && dyNext < -slopeThreshold) {
-                recordExtrema(minima, curr);
+            if (crossingMax) {
+                recordExtrema(maxima, smoothed[i], true);
+            } else if (crossingMin) {
+                recordExtrema(minima, smoothed[i], false);
+            } else {
+                const nearFlatPrev = Math.abs(prevSlope) <= slopeThreshold;
+                const nearFlatNext = Math.abs(nextSlope) <= slopeThreshold;
+                if (nearFlatPrev && nearFlatNext) {
+                    const window = smoothed.slice(Math.max(0, i - 2), Math.min(smoothed.length, i + 3));
+                    const totalDiff = window.reduce((sum, point, idx) => {
+                        if (idx === 0) {
+                            return sum;
+                        }
+                        return sum + (window[idx].y - window[idx - 1].y);
+                    }, 0);
+                    const avgSlope = totalDiff / Math.max(1, window.length - 1);
+                    if (avgSlope > slopeThreshold) {
+                        recordExtrema(minima, smoothed[i], false);
+                    } else if (avgSlope < -slopeThreshold) {
+                        recordExtrema(maxima, smoothed[i], true);
+                    }
+                }
             }
         }
     });
