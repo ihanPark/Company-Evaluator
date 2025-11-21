@@ -46,7 +46,7 @@ function loadImageFile(file) {
         canvasContext.drawImage(img, 0, 0, width, height);
         currentImage = img;
         analyzeImageButton.disabled = false;
-        imageStatusContainer.textContent = 'Image loaded. Click "Highlight graph & mark extrema" to spotlight the curve and annotate its peaks.';
+        imageStatusContainer.textContent = 'Image loaded. Click "Mark graph with dots & mark extrema" to annotate the curve and its peaks.';
 
         URL.revokeObjectURL(imageUrl);
     };
@@ -97,7 +97,7 @@ function getBrightness(r, g, b) {
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-function highlightGraphPixels(ctx, width, height) {
+function detectGraphMask(ctx, width, height) {
     const imageData = ctx.getImageData(0, 0, width, height);
     const { data } = imageData;
     const candidateMask = new Uint8Array(width * height);
@@ -148,7 +148,6 @@ function highlightGraphPixels(ctx, width, height) {
 
     const averageBrightness = brightnessSum / pixelCount;
     const threshold = Math.min(averageBrightness * 1.1, averageBrightness + 24);
-    const highlightColor = { r: 34, g: 197, b: 94 };
     let highlightedCount = 0;
 
     for (let y = 0; y < height; y += 1) {
@@ -161,9 +160,6 @@ function highlightGraphPixels(ctx, width, height) {
             const offset = index * 4;
             const brightness = getBrightness(data[offset], data[offset + 1], data[offset + 2]);
             if (brightness <= threshold) {
-                data[offset] = Math.round(data[offset] * 0.3 + highlightColor.r * 0.7);
-                data[offset + 1] = Math.round(data[offset + 1] * 0.3 + highlightColor.g * 0.7);
-                data[offset + 2] = Math.round(data[offset + 2] * 0.3 + highlightColor.b * 0.7);
                 highlightMask[index] = 1;
                 highlightedCount += 1;
             }
@@ -173,13 +169,53 @@ function highlightGraphPixels(ctx, width, height) {
     if (highlightedCount === 0) {
         return null;
     }
-
-    ctx.putImageData(imageData, 0, 0);
     return {
         highlightedCount,
         totalCount: pixelCount,
         highlightMask,
     };
+}
+
+function sampleGraphDots(mask, width, height, desiredCount = 100) {
+    const coords = [];
+    for (let index = 0; index < mask.length; index += 1) {
+        if (mask[index]) {
+            coords.push({ x: index % width, y: Math.floor(index / width) });
+        }
+    }
+
+    if (!coords.length) {
+        return [];
+    }
+
+    if (coords.length <= desiredCount) {
+        return coords;
+    }
+
+    const step = coords.length / desiredCount;
+    const sampled = [];
+    for (let i = 0; i < desiredCount; i += 1) {
+        const coord = coords[Math.floor(i * step)];
+        if (coord) {
+            sampled.push(coord);
+        }
+    }
+    return sampled;
+}
+
+function drawGraphDots(ctx, dots) {
+    if (!dots.length) {
+        return;
+    }
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(34, 197, 94, 0.95)';
+    dots.forEach((point) => {
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.restore();
 }
 
 function findExtremaFromMask(mask, width, height) {
@@ -504,13 +540,22 @@ analyzeImageButton.addEventListener('click', () => {
     canvasContext.clearRect(0, 0, width, height);
     canvasContext.drawImage(currentImage, 0, 0, width, height);
 
-    const highlightSummary = highlightGraphPixels(canvasContext, width, height);
+    const highlightSummary = detectGraphMask(canvasContext, width, height);
     if (!highlightSummary) {
         imageMessageContainer.textContent = 'Unable to detect the graph. Ensure the curve is coloured and stands out from the grid lines.';
         return;
     }
 
     const mask = highlightSummary.highlightMask;
+    const graphDots = sampleGraphDots(mask, width, height, 100);
+
+    if (!graphDots.length) {
+        imageMessageContainer.textContent = 'Detected potential curve pixels but could not place dots. Try a clearer image with stronger colour contrast.';
+        return;
+    }
+
+    drawGraphDots(canvasContext, graphDots);
+
     const extrema = findExtremaFromMask(mask, width, height);
     const profile = buildCurveProfile(mask, width, height);
     const localExtrema = detectLocalExtrema(profile);
@@ -520,10 +565,11 @@ analyzeImageButton.addEventListener('click', () => {
     const snappedMin = extrema?.minPoint ? snapPointToMask(extrema.minPoint, mask, width, height) : null;
     const snappedLocalMaxima = snapPointsToMask(localExtrema?.maxima, mask, width, height);
     const snappedLocalMinima = snapPointsToMask(localExtrema?.minima, mask, width, height);
+    const dotsCount = graphDots.length;
 
     if (snappedFlat) {
         drawMarker(canvasContext, snappedFlat, { color: '#c026d3', label: 'Flat extremum' });
-        imageStatusContainer.textContent = `Highlighted ${highlightSummary.highlightedCount.toLocaleString()} coloured pixels after filtering out grid lines. Marked a flat extremum${snappedLocalMaxima.length || snappedLocalMinima.length ? ' plus local extrema.' : '.'}`;
+        imageStatusContainer.textContent = `Marked ${dotsCount} dots along the detected curve after filtering out grid lines. Marked a flat extremum${snappedLocalMaxima.length || snappedLocalMinima.length ? ' plus local extrema.' : '.'}`;
     } else if (snappedMax || snappedMin) {
         if (snappedMax) {
             drawMarker(canvasContext, snappedMax, { color: '#dc2626', label: 'Max' });
@@ -536,7 +582,7 @@ analyzeImageButton.addEventListener('click', () => {
             snappedMin ? 'minimum' : null,
         ].filter(Boolean);
         const labelText = extremaLabels.length ? ` Marked the ${extremaLabels.join(' and ')}.` : '';
-        imageStatusContainer.textContent = `Highlighted ${highlightSummary.highlightedCount.toLocaleString()} coloured pixels after filtering out grid lines.${labelText}`;
+        imageStatusContainer.textContent = `Marked ${dotsCount} dots along the detected curve after filtering out grid lines.${labelText}`;
     }
 
     if (snappedLocalMaxima.length || snappedLocalMinima.length) {
@@ -555,11 +601,11 @@ analyzeImageButton.addEventListener('click', () => {
         }
         const prefix = snappedFlat || snappedMax || snappedMin ? ' Also marked' : 'Marked';
         const description = localParts.length ? `${prefix} ${localParts.join(' and ')}.` : '';
-        imageStatusContainer.textContent = `${imageStatusContainer.textContent || `Highlighted ${highlightSummary.highlightedCount.toLocaleString()} coloured pixels after filtering out grid lines.`}${description}`.trim();
+        imageStatusContainer.textContent = `${imageStatusContainer.textContent || `Marked ${dotsCount} dots along the detected curve after filtering out grid lines.`}${description}`.trim();
         return;
     }
 
     if (!snappedFlat && !snappedMax && !snappedMin) {
-        imageStatusContainer.textContent = `Highlighted ${highlightSummary.highlightedCount.toLocaleString()} coloured pixels after filtering out grid lines. No clear extrema detected on the highlighted graph.`;
+        imageStatusContainer.textContent = `Marked ${dotsCount} dots along the detected curve after filtering out grid lines. No clear extrema detected on the detected graph.`;
     }
 });
