@@ -46,7 +46,7 @@ function loadImageFile(file) {
         canvasContext.drawImage(img, 0, 0, width, height);
         currentImage = img;
         analyzeImageButton.disabled = false;
-        imageStatusContainer.textContent = 'Image loaded. Click "Highlight graph" to tint the curve that contrasts with the background.';
+        imageStatusContainer.textContent = 'Image loaded. Click "Highlight graph" to tint the curve that contrasts with the background, then confirm to mark extrema if it looks correct.';
 
         URL.revokeObjectURL(imageUrl);
     };
@@ -307,6 +307,69 @@ function applyGraphHighlight(ctx, mask, width, height) {
     ctx.putImageData(imageData, 0, 0);
 }
 
+function findGlobalExtrema(mask, width, height) {
+    let highestPoint = null;
+    let lowestPoint = null;
+
+    for (let index = 0; index < mask.length; index += 1) {
+        if (!mask[index]) {
+            continue;
+        }
+
+        const x = index % width;
+        const y = Math.floor(index / width);
+
+        if (!highestPoint || y < highestPoint.y) {
+            highestPoint = { x, y };
+        }
+
+        if (!lowestPoint || y > lowestPoint.y) {
+            lowestPoint = { x, y };
+        }
+    }
+
+    return { highestPoint, lowestPoint };
+}
+
+function drawMarker(ctx, { x, y }, color, label) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+
+    ctx.beginPath();
+    ctx.arc(x, y, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = '14px Arial';
+    ctx.fillStyle = color;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 3;
+    ctx.strokeText(label, x + 10, y - 10);
+    ctx.fillText(label, x + 10, y - 10);
+
+    ctx.restore();
+}
+
+function markExtrema(ctx, mask, width, height) {
+    const { highestPoint, lowestPoint } = findGlobalExtrema(mask, width, height);
+
+    if (!highestPoint && !lowestPoint) {
+        return false;
+    }
+
+    if (highestPoint) {
+        drawMarker(ctx, highestPoint, '#e11d48', 'Max');
+    }
+
+    if (lowestPoint) {
+        drawMarker(ctx, lowestPoint, '#0ea5e9', 'Min');
+    }
+
+    return true;
+}
+
 analyzeImageButton.addEventListener('click', () => {
     resetImageFeedback();
     imageStatusContainer.textContent = '';
@@ -330,5 +393,16 @@ analyzeImageButton.addEventListener('click', () => {
     const mask = highlightSummary.highlightMask;
     applyGraphHighlight(canvasContext, mask, width, height);
 
-    imageStatusContainer.textContent = 'Highlighted the detected curve using contrast, width-spanning continuity, and fluctuation checks.';
+    const userSatisfied = window.confirm('Is the highlighted curve correct? Click OK to mark maximum and minimum points.');
+
+    if (userSatisfied) {
+        const marked = markExtrema(canvasContext, mask, width, height);
+        if (marked) {
+            imageStatusContainer.textContent = 'Graph highlighted. Marked the maximum and minimum points on the detected curve.';
+        } else {
+            imageStatusContainer.textContent = 'Graph highlighted, but no extrema points were identified on the detected curve.';
+        }
+    } else {
+        imageStatusContainer.textContent = 'Graph highlighted. Extrema marking skipped per your choice.';
+    }
 });
