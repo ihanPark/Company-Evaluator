@@ -4,12 +4,16 @@ const graphCanvas = document.getElementById('graphCanvas');
 const imageMessageContainer = document.getElementById('imageMessage');
 const imageStatusContainer = document.getElementById('imageStatus');
 const dropZone = document.getElementById('dropZone');
+const markExtremaButton = document.getElementById('markExtrema');
 const canvasContext = graphCanvas.getContext('2d');
 let currentImage = null;
+let lastHighlightMask = null;
 
 function resetImageFeedback() {
     imageMessageContainer.textContent = '';
     imageStatusContainer.textContent = '';
+    markExtremaButton.disabled = true;
+    lastHighlightMask = null;
 }
 
 function loadImageFile(file) {
@@ -46,7 +50,7 @@ function loadImageFile(file) {
         canvasContext.drawImage(img, 0, 0, width, height);
         currentImage = img;
         analyzeImageButton.disabled = false;
-        imageStatusContainer.textContent = 'Image loaded. Click "Highlight graph" to tint the curve that contrasts with the background, then type "correct" when prompted to mark extrema.';
+        imageStatusContainer.textContent = 'Image loaded. Click "Highlight graph" to tint the curve that contrasts with the background, then click "Mark Extremum" if the highlighted curve looks correct.';
 
         URL.revokeObjectURL(imageUrl);
     };
@@ -382,6 +386,8 @@ analyzeImageButton.addEventListener('click', () => {
     const { width, height } = graphCanvas;
     canvasContext.clearRect(0, 0, width, height);
     canvasContext.drawImage(currentImage, 0, 0, width, height);
+    markExtremaButton.disabled = true;
+    lastHighlightMask = null;
 
     const highlightSummary = detectGraphMask(canvasContext, width, height);
     if (!highlightSummary) {
@@ -392,18 +398,29 @@ analyzeImageButton.addEventListener('click', () => {
 
     const mask = highlightSummary.highlightMask;
     applyGraphHighlight(canvasContext, mask, width, height);
+    lastHighlightMask = { mask, width, height };
+    markExtremaButton.disabled = false;
+    imageStatusContainer.textContent = 'Graph highlighted. If it looks correct, click "Mark Extremum" to place the maximum and minimum points on the curve.';
+});
 
-    const userFeedback = window.prompt('Is the highlighted curve correct? Type "correct" to mark maximum and minimum points.');
-    const userSatisfied = typeof userFeedback === 'string' && userFeedback.trim().toLowerCase() === 'correct';
+markExtremaButton.addEventListener('click', () => {
+    imageMessageContainer.textContent = '';
 
-    if (userSatisfied) {
-        const marked = markExtrema(canvasContext, mask, width, height);
-        if (marked) {
-            imageStatusContainer.textContent = 'Graph highlighted. Marked the maximum and minimum points on the detected curve.';
-        } else {
-            imageStatusContainer.textContent = 'Graph highlighted, but no extrema points were identified on the detected curve.';
-        }
+    if (!lastHighlightMask || !currentImage) {
+        imageMessageContainer.textContent = 'Highlight the graph before marking extrema.';
+        return;
+    }
+
+    const { mask, width, height } = lastHighlightMask;
+
+    canvasContext.clearRect(0, 0, width, height);
+    canvasContext.drawImage(currentImage, 0, 0, width, height);
+    applyGraphHighlight(canvasContext, mask, width, height);
+
+    const marked = markExtrema(canvasContext, mask, width, height);
+    if (marked) {
+        imageStatusContainer.textContent = 'Graph highlighted. Marked the maximum and minimum points on the detected curve.';
     } else {
-        imageStatusContainer.textContent = 'Graph highlighted. Extrema marking skipped because feedback was not "correct".';
+        imageStatusContainer.textContent = 'Graph highlighted, but no extrema points were identified on the detected curve.';
     }
 });
