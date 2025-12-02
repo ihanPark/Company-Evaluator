@@ -353,30 +353,6 @@ function drawVerticalDivisions(ctx, width, height, sections = 20) {
     ctx.restore();
 }
 
-function findGlobalExtrema(mask, width, height) {
-    let highestPoint = null;
-    let lowestPoint = null;
-
-    for (let index = 0; index < mask.length; index += 1) {
-        if (!mask[index]) {
-            continue;
-        }
-
-        const x = index % width;
-        const y = Math.floor(index / width);
-
-        if (!highestPoint || y < highestPoint.y) {
-            highestPoint = { x, y };
-        }
-
-        if (!lowestPoint || y > lowestPoint.y) {
-            lowestPoint = { x, y };
-        }
-    }
-
-    return { highestPoint, lowestPoint };
-}
-
 function drawMarker(ctx, { x, y }, color, label) {
     ctx.save();
     ctx.fillStyle = color;
@@ -398,22 +374,69 @@ function drawMarker(ctx, { x, y }, color, label) {
     ctx.restore();
 }
 
-function markExtrema(ctx, mask, width, height) {
-    const { highestPoint, lowestPoint } = findGlobalExtrema(mask, width, height);
+function findSectionExtrema(mask, width, height, sections = 20) {
+    const sectionWidth = width / sections;
+    const extrema = [];
 
-    if (!highestPoint && !lowestPoint) {
-        return false;
+    for (let section = 0; section < sections; section += 1) {
+        const startX = Math.floor(section * sectionWidth);
+        const endX = section === sections - 1
+            ? width - 1
+            : Math.floor((section + 1) * sectionWidth) - 1;
+
+        let highestPoint = null;
+        let lowestPoint = null;
+
+        for (let y = 0; y < height; y += 1) {
+            const rowOffset = y * width;
+            for (let x = startX; x <= endX; x += 1) {
+                const index = rowOffset + x;
+                if (!mask[index]) {
+                    continue;
+                }
+
+                if (!highestPoint || y < highestPoint.y) {
+                    highestPoint = { x, y, section };
+                }
+
+                if (!lowestPoint || y > lowestPoint.y) {
+                    lowestPoint = { x, y, section };
+                }
+            }
+        }
+
+        if (highestPoint || lowestPoint) {
+            extrema.push({ section, highestPoint, lowestPoint });
+        }
     }
 
-    if (highestPoint) {
-        drawMarker(ctx, highestPoint, '#e11d48', 'Max');
+    return extrema;
+}
+
+function markExtrema(ctx, mask, width, height, sections = 20) {
+    const perSectionExtrema = findSectionExtrema(mask, width, height, sections);
+
+    if (!perSectionExtrema.length) {
+        return 0;
     }
 
-    if (lowestPoint) {
-        drawMarker(ctx, lowestPoint, '#0ea5e9', 'Min');
-    }
+    let markerCount = 0;
 
-    return true;
+    perSectionExtrema.forEach(({ section, highestPoint, lowestPoint }) => {
+        const labelSuffix = ` ${section + 1}`;
+
+        if (highestPoint) {
+            drawMarker(ctx, highestPoint, '#e11d48', `Max${labelSuffix}`);
+            markerCount += 1;
+        }
+
+        if (lowestPoint) {
+            drawMarker(ctx, lowestPoint, '#0ea5e9', `Min${labelSuffix}`);
+            markerCount += 1;
+        }
+    });
+
+    return markerCount;
 }
 
 analyzeImageButton.addEventListener('click', () => {
@@ -443,7 +466,7 @@ analyzeImageButton.addEventListener('click', () => {
     drawVerticalDivisions(canvasContext, width, height, 20);
     lastHighlightMask = { mask, width, height };
     markExtremaButton.disabled = false;
-    imageStatusContainer.textContent = 'Graph highlighted. Use the "Mark Extremum" button beneath the canvas to place the maximum and minimum points on the curve—no pop-ups needed.';
+    imageStatusContainer.textContent = 'Graph highlighted. Use the "Mark Extremum" button beneath the canvas to place maximum and minimum markers within each vertical section of the curve—no pop-ups needed.';
 });
 
 markExtremaButton.addEventListener('click', () => {
@@ -462,9 +485,9 @@ markExtremaButton.addEventListener('click', () => {
     whitenBackground(canvasContext, mask, width, height);
     drawVerticalDivisions(canvasContext, width, height, 20);
 
-    const marked = markExtrema(canvasContext, mask, width, height);
-    if (marked) {
-        imageStatusContainer.textContent = 'Graph highlighted on a white background. Marked the maximum and minimum points on the detected curve.';
+    const markersPlaced = markExtrema(canvasContext, mask, width, height, 20);
+    if (markersPlaced) {
+        imageStatusContainer.textContent = `Graph highlighted on a white background. Marked ${markersPlaced} extrema across the vertical sections of the detected curve.`;
     } else {
         imageStatusContainer.textContent = 'Graph highlighted, but no extrema points were identified on the detected curve.';
     }
