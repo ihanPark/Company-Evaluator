@@ -239,6 +239,11 @@ function detectGraphMask(ctx, width, height) {
 
     const componentColumns = [];
     const componentRows = [];
+    let minX = width;
+    let maxX = -1;
+    let minY = height;
+    let maxY = -1;
+
     largestComponent.highlightMask.forEach((value, idx) => {
         if (!value) {
             return;
@@ -247,9 +252,28 @@ function detectGraphMask(ctx, width, height) {
         const y = Math.floor(idx / width);
         componentColumns.push(x);
         componentRows.push(y);
+
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
     });
 
     if (hasLargeGap(componentColumns, 30) || hasLargeGap(componentRows, 30)) {
+        return null;
+    }
+
+    const leftBound = Math.min(50, width - 1);
+    const rightBound = Math.max(width - 51, 0);
+    const touchesLeft = minX <= leftBound;
+    const touchesRight = maxX >= rightBound;
+    if (!touchesLeft || !touchesRight) {
+        return null;
+    }
+
+    const spanX = maxX - minX;
+    const spanY = maxY - minY;
+    if (spanX <= 10 && spanY <= 10) {
         return null;
     }
 
@@ -298,13 +322,13 @@ analyzeImageButton.addEventListener('click', () => {
 
     const highlightSummary = detectGraphMask(canvasContext, width, height);
     if (!highlightSummary) {
-        imageMessageContainer.textContent = 'No graph detected. Try an image where the curve contrasts strongly with the background and remains continuous.';
-        imageStatusContainer.textContent = 'Detection failed: no continuous, contrasting curve was found.';
+        imageMessageContainer.textContent = 'No graph detected. Try an image where the curve contrasts strongly with the background, runs across the width, and shows visible movement.';
+        imageStatusContainer.textContent = 'Detection failed: no contrasting, continuous curve spanning the image with clear variation was found.';
         return;
     }
 
     const mask = highlightSummary.highlightMask;
     applyGraphHighlight(canvasContext, mask, width, height);
 
-    imageStatusContainer.textContent = 'Highlighted the detected curve using background contrast and continuity checks.';
+    imageStatusContainer.textContent = 'Highlighted the detected curve using contrast, width-spanning continuity, and fluctuation checks.';
 });
