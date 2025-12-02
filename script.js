@@ -298,7 +298,8 @@ analyzeImageButton.addEventListener('click', () => {
 
     const highlightSummary = detectGraphMask(canvasContext, width, height);
     if (!highlightSummary) {
-        imageMessageContainer.textContent = 'Unable to detect the graph. Ensure the curve is coloured and stands out from the grid lines.';
+        imageMessageContainer.textContent = 'No graph detected. Try an image where the curve contrasts strongly with the background and remains continuous.';
+        imageStatusContainer.textContent = 'Detection failed: no continuous, contrasting curve was found.';
         return;
     }
 
