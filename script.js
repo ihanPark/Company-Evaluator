@@ -6,6 +6,7 @@ const imageStatusContainer = document.getElementById('imageStatus');
 const dropZone = document.getElementById('dropZone');
 const markExtremaButton = document.getElementById('markExtrema');
 const canvasContext = graphCanvas.getContext('2d');
+const SECTION_COUNT = 40;
 let currentImage = null;
 let lastHighlightMask = null;
 
@@ -330,7 +331,7 @@ function whitenBackground(ctx, mask, width, height) {
     ctx.putImageData(imageData, 0, 0);
 }
 
-function drawVerticalDivisions(ctx, width, height, sections = 20) {
+function drawVerticalDivisions(ctx, width, height, sections = SECTION_COUNT) {
     if (sections <= 0) {
         return;
     }
@@ -374,7 +375,7 @@ function drawMarker(ctx, { x, y }, color, label) {
     ctx.restore();
 }
 
-function findSectionExtrema(mask, width, height, sections = 20) {
+function findSectionExtrema(mask, width, height, sections = SECTION_COUNT) {
     const sectionWidth = width / sections;
     const extrema = [];
     const missingSections = [];
@@ -444,7 +445,7 @@ function findOrangeMinima(extrema) {
     return orangeKeys;
 }
 
-function markExtrema(ctx, mask, width, height, sections = 20) {
+function markExtrema(ctx, mask, width, height, sections = SECTION_COUNT) {
     const { extrema, missingSections } = findSectionExtrema(mask, width, height, sections);
     const orangeMinima = findOrangeMinima(extrema);
 
@@ -493,7 +494,7 @@ analyzeImageButton.addEventListener('click', () => {
 
     const mask = highlightSummary.highlightMask;
     applyGraphHighlight(canvasContext, mask, width, height);
-    drawVerticalDivisions(canvasContext, width, height, 20);
+    drawVerticalDivisions(canvasContext, width, height, SECTION_COUNT);
     lastHighlightMask = { mask, width, height };
     markExtremaButton.disabled = false;
     imageStatusContainer.textContent = 'Graph highlighted. Use the "Mark Extremum" button beneath the canvas to place maximum and minimum markers within each vertical section of the curve—no pop-ups needed.';
@@ -513,9 +514,9 @@ markExtremaButton.addEventListener('click', () => {
     canvasContext.drawImage(currentImage, 0, 0, width, height);
     applyGraphHighlight(canvasContext, mask, width, height);
     whitenBackground(canvasContext, mask, width, height);
-    drawVerticalDivisions(canvasContext, width, height, 20);
+    drawVerticalDivisions(canvasContext, width, height, SECTION_COUNT);
 
-    const { markerCount, missingSections } = markExtrema(canvasContext, mask, width, height, 20);
+    const { markerCount, missingSections } = markExtrema(canvasContext, mask, width, height, SECTION_COUNT);
     if (markerCount) {
         const missingNote = missingSections.length
             ? ` Sections without detected graph pixels: ${missingSections.join(', ')}.`
