@@ -417,27 +417,38 @@ function findSectionExtrema(mask, width, height, sections = 20) {
 }
 
 function findOrangeMinima(extrema) {
-    let currentRun = [];
-    const orangeKeys = new Set();
-
+    const points = [];
     extrema.forEach(({ highestPoint, lowestPoint }) => {
         if (highestPoint) {
-            if (currentRun.length >= 2) {
-                currentRun.forEach((point) => {
-                    orangeKeys.add(`${point.section}-${point.x}-${point.y}`);
-                });
-            }
-            currentRun = [];
+            points.push({ ...highestPoint, type: 'max' });
         }
-
         if (lowestPoint) {
-            currentRun.push(lowestPoint);
+            points.push({ ...lowestPoint, type: 'min' });
         }
     });
 
+    points.sort((a, b) => a.x - b.x || a.y - b.y);
+
+    let currentRun = [];
+    const orangeKeys = new Set();
+
+    points.forEach((point) => {
+        if (point.type === 'max') {
+            if (currentRun.length >= 2) {
+                currentRun.forEach((minPoint) => {
+                    orangeKeys.add(`${minPoint.section}-${minPoint.x}-${minPoint.y}`);
+                });
+            }
+            currentRun = [];
+            return;
+        }
+
+        currentRun.push(point);
+    });
+
     if (currentRun.length >= 2) {
-        currentRun.forEach((point) => {
-            orangeKeys.add(`${point.section}-${point.x}-${point.y}`);
+        currentRun.forEach((minPoint) => {
+            orangeKeys.add(`${minPoint.section}-${minPoint.x}-${minPoint.y}`);
         });
     }
 
