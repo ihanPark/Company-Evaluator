@@ -71,6 +71,11 @@ button:hover:not(:disabled) {
     margin-top: 1rem;
     color: #1e3a8a;
 }
+.dimensions {
+    margin-top: 0.5rem;
+    color: #1f2937;
+    font-size: 0.95rem;
+}
 .hint {
     font-size: 0.9rem;
     color: #555;

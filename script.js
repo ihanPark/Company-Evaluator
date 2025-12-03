@@ -3,6 +3,7 @@ const analyzeImageButton = document.getElementById('analyzeImage');
 const graphCanvas = document.getElementById('graphCanvas');
 const imageMessageContainer = document.getElementById('imageMessage');
 const imageStatusContainer = document.getElementById('imageStatus');
+const imageDimensionsContainer = document.getElementById('imageDimensions');
 const dropZone = document.getElementById('dropZone');
 const markExtremaButton = document.getElementById('markExtrema');
 const canvasContext = graphCanvas.getContext('2d');
@@ -24,12 +25,14 @@ function loadImageFile(file) {
     if (!file) {
         graphCanvas.style.display = 'none';
         canvasContext.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+        imageDimensionsContainer.textContent = '';
         currentImage = null;
         return;
     }
 
     if (!file.type || !file.type.startsWith('image/')) {
         imageMessageContainer.textContent = 'Please upload a valid image file.';
+        imageDimensionsContainer.textContent = '';
         graphImageInput.value = '';
         return;
     }
@@ -50,6 +53,7 @@ function loadImageFile(file) {
         canvasContext.clearRect(0, 0, width, height);
         canvasContext.drawImage(img, 0, 0, width, height);
         currentImage = img;
+        imageDimensionsContainer.textContent = `Image size: ${width}px × ${height}px`;
         analyzeImageButton.disabled = false;
         imageStatusContainer.textContent = 'Image loaded. Click "Highlight graph" to tint the curve that contrasts with the background, then use the "Mark Extremum" button beneath the canvas to place markers if the highlight looks right.';
 
@@ -57,6 +61,7 @@ function loadImageFile(file) {
     };
     img.onerror = () => {
         imageMessageContainer.textContent = 'Unable to load the selected image. Please choose another file.';
+        imageDimensionsContainer.textContent = '';
         URL.revokeObjectURL(imageUrl);
     };
     img.src = imageUrl;
