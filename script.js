@@ -377,6 +377,7 @@ function drawMarker(ctx, { x, y }, color, label) {
 function findSectionExtrema(mask, width, height, sections = 20) {
     const sectionWidth = width / sections;
     const extrema = [];
+    const missingSections = [];
 
     for (let section = 0; section < sections; section += 1) {
         const startX = Math.floor(section * sectionWidth);
@@ -405,24 +406,22 @@ function findSectionExtrema(mask, width, height, sections = 20) {
             }
         }
 
-        if (highestPoint || lowestPoint) {
-            extrema.push({ section, highestPoint, lowestPoint });
+        if (!highestPoint && !lowestPoint) {
+            missingSections.push(section + 1);
         }
+
+        extrema.push({ section, highestPoint, lowestPoint });
     }
 
-    return extrema;
+    return { extrema, missingSections };
 }
 
 function markExtrema(ctx, mask, width, height, sections = 20) {
-    const perSectionExtrema = findSectionExtrema(mask, width, height, sections);
-
-    if (!perSectionExtrema.length) {
-        return 0;
-    }
+    const { extrema, missingSections } = findSectionExtrema(mask, width, height, sections);
 
     let markerCount = 0;
 
-    perSectionExtrema.forEach(({ section, highestPoint, lowestPoint }) => {
+    extrema.forEach(({ section, highestPoint, lowestPoint }) => {
         const labelSuffix = ` ${section + 1}`;
 
         if (highestPoint) {
@@ -436,7 +435,7 @@ function markExtrema(ctx, mask, width, height, sections = 20) {
         }
     });
 
-    return markerCount;
+    return { markerCount, missingSections };
 }
 
 analyzeImageButton.addEventListener('click', () => {
@@ -485,9 +484,12 @@ markExtremaButton.addEventListener('click', () => {
     whitenBackground(canvasContext, mask, width, height);
     drawVerticalDivisions(canvasContext, width, height, 20);
 
-    const markersPlaced = markExtrema(canvasContext, mask, width, height, 20);
-    if (markersPlaced) {
-        imageStatusContainer.textContent = `Graph highlighted on a white background. Marked ${markersPlaced} extrema across the vertical sections of the detected curve.`;
+    const { markerCount, missingSections } = markExtrema(canvasContext, mask, width, height, 20);
+    if (markerCount) {
+        const missingNote = missingSections.length
+            ? ` Sections without detected graph pixels: ${missingSections.join(', ')}.`
+            : '';
+        imageStatusContainer.textContent = `Graph highlighted on a white background. Marked ${markerCount} extrema (one maximum and one minimum per populated section).${missingNote}`;
     } else {
         imageStatusContainer.textContent = 'Graph highlighted, but no extrema points were identified on the detected curve.';
     }
