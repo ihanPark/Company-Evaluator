@@ -115,3 +115,26 @@ button:hover:not(:disabled) {
 #graphImage {
     margin-top: 0.75rem;
 }
+
+.extremum-chart {
+    margin-top: 1.25rem;
+    overflow-x: auto;
+}
+
+.extremum-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.5rem;
+}
+
+.extremum-table th,
+.extremum-table td {
+    border: 1px solid #e5e7eb;
+    padding: 0.5rem;
+    text-align: center;
+}
+
+.extremum-table th {
+    background: #eef2ff;
+    font-weight: 600;
+}

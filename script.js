@@ -6,6 +6,7 @@ const imageStatusContainer = document.getElementById('imageStatus');
 const imageDimensionsContainer = document.getElementById('imageDimensions');
 const dropZone = document.getElementById('dropZone');
 const markExtremaButton = document.getElementById('markExtrema');
+const extremumChartContainer = document.getElementById('extremumChart');
 const canvasContext = graphCanvas.getContext('2d');
 const SECTION_COUNT = 40;
 let currentImage = null;
@@ -14,6 +15,7 @@ let lastHighlightMask = null;
 function resetImageFeedback() {
     imageMessageContainer.textContent = '';
     imageStatusContainer.textContent = '';
+    extremumChartContainer.innerHTML = '';
     markExtremaButton.disabled = true;
     lastHighlightMask = null;
 }
@@ -403,6 +405,66 @@ function drawMarker(ctx, { x, y }, color, label) {
     ctx.restore();
 }
 
+function pixelToGridCoordinates(x, y, width, height, sections = SECTION_COUNT) {
+    const sectionWidth = width / sections;
+    const sectionHeight = height / sections;
+    const gridX = x / sectionWidth;
+    const gridY = (height - y) / sectionHeight;
+
+    return { x: gridX, y: gridY };
+}
+
+function renderExtremumTable(maxima, minima, width, height) {
+    extremumChartContainer.innerHTML = '';
+
+    if (!maxima.length && !minima.length) {
+        extremumChartContainer.textContent = 'No extrema to display.';
+        return;
+    }
+
+    const table = document.createElement('table');
+    table.className = 'extremum-table';
+
+    const columnCount = Math.max(maxima.length, minima.length);
+    const headerRow = document.createElement('tr');
+    headerRow.appendChild(document.createElement('th'));
+
+    for (let i = 0; i < columnCount; i += 1) {
+        const th = document.createElement('th');
+        th.textContent = i + 1;
+        headerRow.appendChild(th);
+    }
+
+    table.appendChild(headerRow);
+
+    const makeRow = (label, points) => {
+        const row = document.createElement('tr');
+        const heading = document.createElement('th');
+        heading.scope = 'row';
+        heading.textContent = label;
+        row.appendChild(heading);
+
+        for (let i = 0; i < columnCount; i += 1) {
+            const cell = document.createElement('td');
+            const point = points[i];
+            if (point) {
+                const coords = pixelToGridCoordinates(point.x, point.y, width, height);
+                cell.textContent = `(${coords.x.toFixed(2)}, ${coords.y.toFixed(2)})`;
+            } else {
+                cell.textContent = '—';
+            }
+            row.appendChild(cell);
+        }
+
+        table.appendChild(row);
+    };
+
+    makeRow('Max', maxima);
+    makeRow('Min', minima);
+
+    extremumChartContainer.appendChild(table);
+}
+
 function findSectionExtrema(mask, width, height, sections = SECTION_COUNT) {
     const sectionWidth = width / sections;
     const extrema = [];
@@ -478,12 +540,15 @@ function markExtrema(ctx, mask, width, height, sections = SECTION_COUNT) {
     const orangeMinima = findOrangeMinima(extrema);
 
     let markerCount = 0;
+    const maxima = [];
+    const minima = [];
 
     extrema.forEach(({ section, highestPoint, lowestPoint }) => {
         const labelSuffix = ` ${section + 1}`;
 
         if (highestPoint) {
             drawMarker(ctx, highestPoint, '#e11d48', `Max${labelSuffix}`);
+            maxima.push(highestPoint);
             markerCount += 1;
         }
 
@@ -491,11 +556,12 @@ function markExtrema(ctx, mask, width, height, sections = SECTION_COUNT) {
             const key = `${section}-${lowestPoint.x}-${lowestPoint.y}`;
             const color = orangeMinima.has(key) && orangeMinima.size >= 2 ? '#f97316' : '#0ea5e9';
             drawMarker(ctx, lowestPoint, color, `Min${labelSuffix}`);
+            minima.push(lowestPoint);
             markerCount += 1;
         }
     });
 
-    return { markerCount, missingSections };
+    return { markerCount, missingSections, maxima, minima };
 }
 
 analyzeImageButton.addEventListener('click', () => {
@@ -517,6 +583,7 @@ analyzeImageButton.addEventListener('click', () => {
     if (!highlightSummary) {
         imageMessageContainer.textContent = 'No graph detected. Try an image where the curve contrasts strongly with the background, runs across the width, and shows visible movement.';
         imageStatusContainer.textContent = 'Detection failed: no contrasting, continuous curve spanning the image with clear variation was found.';
+        extremumChartContainer.textContent = '';
         return;
     }
 
@@ -526,6 +593,7 @@ analyzeImageButton.addEventListener('click', () => {
     drawHorizontalDivisions(canvasContext, width, height, SECTION_COUNT);
     lastHighlightMask = { mask, width, height };
     markExtremaButton.disabled = false;
+    extremumChartContainer.textContent = 'Click "Mark Extremum" to list coordinates for each detected maximum and minimum.';
     imageStatusContainer.textContent = 'Graph highlighted and divided into 40 vertical and 40 horizontal guide sections. Use the "Mark Extremum" button beneath the canvas to place maximum and minimum markers within each vertical section—no pop-ups needed.';
 });
 
@@ -546,7 +614,8 @@ markExtremaButton.addEventListener('click', () => {
     drawVerticalDivisions(canvasContext, width, height, SECTION_COUNT);
     drawHorizontalDivisions(canvasContext, width, height, SECTION_COUNT);
 
-    const { markerCount, missingSections } = markExtrema(canvasContext, mask, width, height, SECTION_COUNT);
+    const { markerCount, missingSections, maxima, minima } = markExtrema(canvasContext, mask, width, height, SECTION_COUNT);
+    renderExtremumTable(maxima, minima, width, height);
     if (markerCount) {
         const missingNote = missingSections.length
             ? ` Sections without detected graph pixels: ${missingSections.join(', ')}.`
@@ -554,5 +623,6 @@ markExtremaButton.addEventListener('click', () => {
         imageStatusContainer.textContent = `Graph highlighted on a white background with 40 vertical and 40 horizontal guide lines. Marked ${markerCount} extrema (one maximum and one minimum per populated vertical section). Consecutive minima without intervening maxima appear in orange.${missingNote}`;
     } else {
         imageStatusContainer.textContent = 'Graph highlighted, but no extrema points were identified on the detected curve.';
+        extremumChartContainer.textContent = 'No extrema to display.';
     }
 });
