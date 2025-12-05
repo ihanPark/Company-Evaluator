@@ -8,9 +8,15 @@ const dropZone = document.getElementById('dropZone');
 const markExtremaButton = document.getElementById('markExtrema');
 const extremumChartContainer = document.getElementById('extremumChart');
 const canvasContext = graphCanvas.getContext('2d');
-const SECTION_COUNT = 40;
 let currentImage = null;
 let lastHighlightMask = null;
+
+function computeSectionCounts(width, height) {
+    return {
+        verticalSections: Math.max(1, Math.round(width / 18)),
+        horizontalSections: Math.max(1, Math.round(height / 18)),
+    };
+}
 
 function resetImageFeedback() {
     imageMessageContainer.textContent = '';
@@ -338,7 +344,7 @@ function whitenBackground(ctx, mask, width, height) {
     ctx.putImageData(imageData, 0, 0);
 }
 
-function drawVerticalDivisions(ctx, width, height, sections = SECTION_COUNT) {
+function drawVerticalDivisions(ctx, width, height, sections) {
     if (sections <= 0) {
         return;
     }
@@ -361,7 +367,7 @@ function drawVerticalDivisions(ctx, width, height, sections = SECTION_COUNT) {
     ctx.restore();
 }
 
-function drawHorizontalDivisions(ctx, width, height, sections = SECTION_COUNT) {
+function drawHorizontalDivisions(ctx, width, height, sections) {
     if (sections <= 0) {
         return;
     }
@@ -405,16 +411,16 @@ function drawMarker(ctx, { x, y }, color, label) {
     ctx.restore();
 }
 
-function pixelToGridCoordinates(x, y, width, height, sections = SECTION_COUNT) {
-    const sectionWidth = width / sections;
-    const sectionHeight = height / sections;
+function pixelToGridCoordinates(x, y, width, height, verticalSections, horizontalSections) {
+    const sectionWidth = width / verticalSections;
+    const sectionHeight = height / horizontalSections;
     const gridX = x / sectionWidth;
     const gridY = (height - y) / sectionHeight;
 
     return { x: gridX, y: gridY };
 }
 
-function renderExtremumTable(maxima, minima, width, height) {
+function renderExtremumTable(maxima, minima, width, height, verticalSections, horizontalSections) {
     extremumChartContainer.innerHTML = '';
 
     if (!maxima.length && !minima.length) {
@@ -448,7 +454,7 @@ function renderExtremumTable(maxima, minima, width, height) {
             const cell = document.createElement('td');
             const point = points[i];
             if (point) {
-                const coords = pixelToGridCoordinates(point.x, point.y, width, height);
+                const coords = pixelToGridCoordinates(point.x, point.y, width, height, verticalSections, horizontalSections);
                 cell.textContent = `(${coords.x.toFixed(2)}, ${coords.y.toFixed(2)})`;
             } else {
                 cell.textContent = '—';
@@ -465,7 +471,7 @@ function renderExtremumTable(maxima, minima, width, height) {
     extremumChartContainer.appendChild(table);
 }
 
-function findSectionExtrema(mask, width, height, sections = SECTION_COUNT) {
+function findSectionExtrema(mask, width, height, sections) {
     const sectionWidth = width / sections;
     const extrema = [];
     const missingSections = [];
@@ -535,7 +541,7 @@ function findOrangeMinima(extrema) {
     return orangeKeys;
 }
 
-function markExtrema(ctx, mask, width, height, sections = SECTION_COUNT) {
+function markExtrema(ctx, mask, width, height, sections) {
     const { extrema, missingSections } = findSectionExtrema(mask, width, height, sections);
     const orangeMinima = findOrangeMinima(extrema);
 
@@ -574,6 +580,7 @@ analyzeImageButton.addEventListener('click', () => {
     }
 
     const { width, height } = graphCanvas;
+    const { verticalSections, horizontalSections } = computeSectionCounts(width, height);
     canvasContext.clearRect(0, 0, width, height);
     canvasContext.drawImage(currentImage, 0, 0, width, height);
     markExtremaButton.disabled = true;
@@ -589,12 +596,12 @@ analyzeImageButton.addEventListener('click', () => {
 
     const mask = highlightSummary.highlightMask;
     applyGraphHighlight(canvasContext, mask, width, height);
-    drawVerticalDivisions(canvasContext, width, height, SECTION_COUNT);
-    drawHorizontalDivisions(canvasContext, width, height, SECTION_COUNT);
-    lastHighlightMask = { mask, width, height };
+    drawVerticalDivisions(canvasContext, width, height, verticalSections);
+    drawHorizontalDivisions(canvasContext, width, height, horizontalSections);
+    lastHighlightMask = { mask, width, height, verticalSections, horizontalSections };
     markExtremaButton.disabled = false;
     extremumChartContainer.textContent = 'Click "Mark Extremum" to list coordinates for each detected maximum and minimum.';
-    imageStatusContainer.textContent = 'Graph highlighted and divided into 40 vertical and 40 horizontal guide sections. Use the "Mark Extremum" button beneath the canvas to place maximum and minimum markers within each vertical section—no pop-ups needed.';
+    imageStatusContainer.textContent = `Graph highlighted and divided into ${verticalSections} vertical and ${horizontalSections} horizontal guide sections. Use the "Mark Extremum" button beneath the canvas to place maximum and minimum markers within each vertical section—no pop-ups needed.`;
 });
 
 markExtremaButton.addEventListener('click', () => {
@@ -605,22 +612,28 @@ markExtremaButton.addEventListener('click', () => {
         return;
     }
 
-    const { mask, width, height } = lastHighlightMask;
+    const {
+        mask,
+        width,
+        height,
+        verticalSections,
+        horizontalSections,
+    } = lastHighlightMask;
 
     canvasContext.clearRect(0, 0, width, height);
     canvasContext.drawImage(currentImage, 0, 0, width, height);
     applyGraphHighlight(canvasContext, mask, width, height);
     whitenBackground(canvasContext, mask, width, height);
-    drawVerticalDivisions(canvasContext, width, height, SECTION_COUNT);
-    drawHorizontalDivisions(canvasContext, width, height, SECTION_COUNT);
+    drawVerticalDivisions(canvasContext, width, height, verticalSections);
+    drawHorizontalDivisions(canvasContext, width, height, horizontalSections);
 
-    const { markerCount, missingSections, maxima, minima } = markExtrema(canvasContext, mask, width, height, SECTION_COUNT);
-    renderExtremumTable(maxima, minima, width, height);
+    const { markerCount, missingSections, maxima, minima } = markExtrema(canvasContext, mask, width, height, verticalSections);
+    renderExtremumTable(maxima, minima, width, height, verticalSections, horizontalSections);
     if (markerCount) {
         const missingNote = missingSections.length
             ? ` Sections without detected graph pixels: ${missingSections.join(', ')}.`
             : '';
-        imageStatusContainer.textContent = `Graph highlighted on a white background with 40 vertical and 40 horizontal guide lines. Marked ${markerCount} extrema (one maximum and one minimum per populated vertical section). Consecutive minima without intervening maxima appear in orange.${missingNote}`;
+        imageStatusContainer.textContent = `Graph highlighted on a white background with ${verticalSections} vertical and ${horizontalSections} horizontal guide lines. Marked ${markerCount} extrema (one maximum and one minimum per populated vertical section). Consecutive minima without intervening maxima appear in orange.${missingNote}`;
     } else {
         imageStatusContainer.textContent = 'Graph highlighted, but no extrema points were identified on the detected curve.';
         extremumChartContainer.textContent = 'No extrema to display.';
